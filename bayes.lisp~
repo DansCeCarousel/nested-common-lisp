@@ -1,0 +1,81 @@
+;;;; bayes.lisp
+
+(in-package #:bayes)
+
+(defun find-index (point vector)
+  "Find index of an element bigger than the given point"
+  (position t (map 'vector
+		   (lambda (a) (> a point)) vector)))
+(defun sampler (n)
+  "Get n samples drawn from 0 to 1"
+  (aops:generate (lambda ()  (random 1.0)) n))
+(defun observed-data (model samples &optional (start 1))
+  (mapcar model (rtl:range start (+ 1 samples ))))
+(defparameter data (observed-data
+		    (lambda (x) (+ (* 10 (cos (* 20 x))) (* 5 (sin (* 20 x))) (random 1.0)))
+		    10))
+(defun loglike (function vector)
+  (aops:vectorize (vector) (funcall function vector)))
+(defun lkhood (s)
+  (reduce '* (mapcar (lambda (a) (* -0.5  (- a s) (- a s))) datam)))
+(defparameter datam '(0.3 0.3 0.2))		   
+(defun lrps (lmin)
+  "Get index and value bigger than lmin"
+  (let* ((proposed-points (sampler 400))
+	(lk-proposed-points (loglike 'lkhood proposed-points))
+        (index (find-index lmin lk-proposed-points)))
+    (if index
+	(list (aref proposed-points index)
+		(aref lk-proposed-points index)))))
+                ;;proposed-points lk-proposed-points))))
+(defun index-min (vector)
+  (let ((index (position (reduce 'min vector) vector)))
+    index))
+(defun nested-sampling (niter nlive)
+   "Sample nlive, live points. For niter, iterations,find and replace with higher likelihood point"
+  (let* ((volume 1)
+	(live-points (sampler nlive))
+	(live-points-loglike (loglike 'lkhood live-points))
+	(dead-points nil)
+	(dead-points-loglike nil)
+	(dead-points-volume nil)
+	 (volume-remaining nil))
+    (dotimes (i niter)
+      (let* ((lowest (index-min live-points-loglike))
+	     (lmin (aref live-points-loglike lowest))
+	     (volume-shell-fraction (- 1 (exp (/ -1 nlive))))
+	     (volume-shell nil))
+	(setf volume-shell (* volume volume-shell-fraction))
+	(setf volume (* volume (- 1 volume-shell-fraction)))
+	;;eject point
+	(push (reduce 'min live-points) dead-points)
+	(push lmin dead-points-loglike)
+	(push volume-shell dead-points-volume)
+	(push volume volume-remaining)
+	;;replace point
+	(let ((replacement (lrps lmin)))
+	  (if replacement
+	      (setf (aref live-points lowest) (car replacement)
+		    (aref live-points-loglike lowest) (second replacement))))))
+    (list dead-points dead-points-loglike dead-points-volume volume-remaining)))
+	
+	
+(defun evidence-and-posterior-samples (niter nlive)
+  "Returns the evidence, P(data|I)"
+  (let* ((q (nested-sampling niter nlive))
+	 (density (second q))
+	 (width (third q))
+	 (evidence (reduce '+ (mapcar (lambda (a b) (* a b))
+				      density width)))
+	 (posterior-samples (mapcar
+			     (lambda (a b) (/ (* a b) evidence)) density width)))
+    (rtl:with-out-file (posterior "posterior-samples")
+      (princ posterior-samples posterior))))
+    ;;(list evidence posterior-samples)))
+	 
+(defun avg ()
+  "Find the average of the evidence over many runs"
+  (let ((h nil))
+	   (dotimes (i 100)
+	     (push (z 400 40) h))
+	   (/ (reduce '+ h) 100)))

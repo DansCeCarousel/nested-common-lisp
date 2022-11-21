@@ -1,0 +1,11 @@
+;;;; bayes.asd
+
+(asdf:defsystem #:bayes
+  :description "A BAyesian Probability Library"
+  :author "Mich"
+  :license  "Specify license here"
+  :version "0.0.1"
+  :serial t
+  :depends-on (#:array-operations #:let-over-lambda #:rutils)
+  :components ((:file "package")
+               (:file "bayes")))
